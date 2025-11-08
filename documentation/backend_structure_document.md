@@ -1,179 +1,201 @@
-# Backend Structure Document
-
-This document outlines the backend architecture, hosting, and infrastructure for the **codeguide-starter** project. It uses plain language so anyone can understand how the backend is set up and how it supports the application.
+# Backend Structure Document for Multitenant Restaurant SaaS
 
 ## 1. Backend Architecture
 
-- **Framework and Design Pattern**
-  - We use **Next.js API Routes** to handle all server-side logic. These routes live alongside the frontend code in the same repository, making development and deployment simpler.
-  - The backend follows a **layered pattern**:
-    1. **API Layer**: Receives requests (login, registration, data fetch).  
-    2. **Service Layer**: Contains the core business logic (user validation, password hashing).  
-    3. **Data Access Layer**: Talks to the database via a simple ORM (e.g., Prisma or TypeORM).
+**Overall Design**
+- We use a modern, modular backend built with Next.js (App Router) and TypeScript.  
+- All server-side code (API routes, authentication, database access) lives alongside the UI code, making it easy to evolve features end to end.  
+- Authentication is handled by Better Auth, plugged into Next.js API routes for sign-in, sign-up, and session management.  
+- Database access is done via Drizzle ORM, a type-safe query builder on top of PostgreSQL.  
 
-- **Scalability**
-  - Stateless API routes can scale horizontally—new instances can spin up on demand.  
-  - We can add caching or a message queue (e.g., Redis or RabbitMQ) without changing the core code.
+**Scalability**  
+- The app is stateless: any server instance can handle any request, so we scale horizontally by adding more containers or instances.  
+- Data partitioning by `restaurantId` (tenant) ensures each restaurant’s data remains isolated.  
 
-- **Maintainability**
-  - Code for each feature is grouped by route (authentication, dashboard).  
-  - A service layer separates complex logic from request handling.
+**Maintainability**  
+- Clear separation of concerns: UI components, API routes, and database schema live in separate folders (`/components`, `/app/api`, `/db`).  
+- TypeScript everywhere means fewer runtime surprises and better IDE support.  
 
-- **Performance**
-  - Lightweight Node.js handlers keep response times low.  
-  - Future use of database connection pooling and Redis for caching repeated queries.
+**Performance**  
+- Drizzle ORM compiles queries at build time for fast execution.  
+- Static assets and UI components are optimized by Next.js, minimizing load times.  
 
 ## 2. Database Management
 
-- **Database Choice**
-  - We recommend **PostgreSQL** for structured data and reliable transactions.  
-  - In-memory caching can be added later with **Redis** for session tokens or frequently read data.
+**Technology Choices**  
+- Relational database (SQL): PostgreSQL  
+- ORM: Drizzle ORM for schema definitions, migrations, and type-safe queries  
 
-- **Data Storage and Access**
-  - Use an ORM like **Prisma** or **TypeORM** to map JavaScript/TypeScript objects to database tables.
-  - Connection pooling ensures efficient use of database connections under load.
-  - Migrations track schema changes over time, keeping development, staging, and production in sync.
+**Data Organization**  
+- Each core entity (restaurants, users, menus, orders, staff, roles) is a separate table.  
+- Every table that holds tenant-specific data includes a `restaurantId` foreign key to enforce multitenancy.  
+- Role-based access: users have a `role` field (`owner`, `staff`, `super_admin`) for authorization checks.  
 
-- **Data Practices**
-  - Passwords are never stored in plain text—they are salted and hashed with **bcrypt** before saving.
-  - All outgoing data is typed and validated to prevent malformed records.
+**Data Access Patterns**  
+- All queries filter by `restaurantId` (for tenant-aware access).  
+- Drizzle migrations track schema changes and allow versioned updates to the database structure.  
+
+**Best Practices**  
+- Index important columns (`restaurantId`, `userId`, `orderStatus`) for fast lookups.  
+- Use database transactions for multi-step operations (e.g., creating an order and decrementing inventory).  
 
 ## 3. Database Schema
 
-### Human-Readable Format
+**Human-Readable Overview**  
+- **restaurants**: Holds each tenant’s profile (name, address, subscription status).  
+- **users**: Stores user accounts with authentication info, `role`, and linked `restaurantId`.  
+- **menus**: Contains menu items (name, description, price) and `restaurantId`.  
+- **orders**: Tracks customer orders (items, quantities, status, timestamps) with `restaurantId` and `tableId`.  
+- **staff**: Details on staff members (userId, role-specific settings) tied to `restaurantId`.  
+- **roles**: Defines roles and their permissions.  
+- **subscriptions**: Stores billing info and plan details per restaurant.  
 
-- **Users**
-  - **id**: Unique identifier  
-  - **email**: User’s email address (unique)  
-  - **password_hash**: Securely hashed password  
-  - **created_at**: Account creation timestamp
-
-- **Sessions**
-  - **id**: Unique session record  
-  - **user_id**: Links to a user  
-  - **token**: Random string for authentication  
-  - **expires_at**: When the token stops working  
-  - **created_at**: When the session was created
-
-- **DashboardItems** *(optional for dynamic data)*
-  - **id**: Unique record  
-  - **title**: Item title  
-  - **content**: Item details  
-  - **created_at**: When the item was added
-
-### SQL Schema (PostgreSQL)
+**SQL Schema (PostgreSQL)**  
 ```sql
--- Users table
+-- Restaurants (Tenants)
+CREATE TABLE restaurants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  address TEXT,
+  subscription_plan TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Users
 CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL,
+  restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Sessions table
-CREATE TABLE sessions (
-  id SERIAL PRIMARY KEY,
-  user_id INT REFERENCES users(id) ON DELETE CASCADE,
-  token VARCHAR(255) UNIQUE NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
+-- Menus
+CREATE TABLE menus (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  price NUMERIC(10,2) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Dashboard items table
-CREATE TABLE dashboard_items (
-  id SERIAL PRIMARY KEY,
-  title TEXT NOT NULL,
-  content TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
+-- Orders
+CREATE TABLE orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  table_id TEXT,
+  items JSONB NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Staff
+CREATE TABLE staff (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  role_details JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Subscriptions
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  stripe_subscription_id TEXT,
+  plan TEXT,
+  status TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 ```  
 
 ## 4. API Design and Endpoints
 
-- **Approach**: We follow a **RESTful** style, grouping related endpoints under `/api` directories.
+**Approach**  
+- RESTful API routes under `/api/*` in Next.js.  
+- Authentication routes: `/api/auth/[...nextauth]` handle login, logout, and session checks via Better Auth.  
+- Protected routes use Next.js middleware to verify the user session and inject `restaurantId` and `role` into the request context.  
 
-- **Key Endpoints**
-  - `POST /api/auth/register`  
-    • Accepts `{ email, password }`  
-    • Creates a new user and issues a session token  
-  - `POST /api/auth/login`  
-    • Accepts `{ email, password }`  
-    • Verifies credentials and returns a session token  
-  - `POST /api/auth/logout`  
-    • Invalidates the session token on the server  
-  - `GET /api/dashboard/data`  
-    • Requires a valid session  
-    • Returns user-specific data or dashboard items  
-
-- **Communication**
-  - Frontend sends JSON requests; backend replies with JSON and appropriate HTTP status codes.  
-  - Protected routes check for a valid session token (in cookies or Authorization header).
+**Key Endpoints**  
+- **POST /api/auth/login**: Sign in a user and return a session token.  
+- **POST /api/auth/register**: Create a new user or restaurant owner account.  
+- **GET /api/restaurants**: List all restaurants (Super Admin only).  
+- **GET /api/menus**: Fetch menu items for the authenticated user’s restaurant.  
+- **POST /api/menus**: Create a new menu item (Owners only).  
+- **GET /api/orders**: Get active orders for a restaurant.  
+- **POST /api/orders**: Place a new order (public customer-facing route).  
+- **PATCH /api/orders/:id**: Update order status (Staff or Kitchen role).  
+- **GET /api/subscriptions**: Retrieve billing info (Super Admin or Owner).  
 
 ## 5. Hosting Solutions
 
-- **Cloud Provider**:  
-  - **Vercel** (recommended) offers seamless Next.js deployments, auto-scaling, and built-in CDN.  
-  - Alternatively, **Netlify** or any Node.js-capable host will work.
+**Cloud Provider**  
+- We recommend AWS for flexibility, cost control, and global scale.  
+- Core services used:  
+  • Elastic Container Service (ECS) or Elastic Kubernetes Service (EKS) for container orchestration  
+  • Amazon RDS for managed PostgreSQL  
+  • Amazon S3 for static assets (optional)  
+  • AWS Secrets Manager for storing database credentials and API keys  
 
-- **Benefits**
-  - **Reliability**: Global servers and failover across regions.  
-  - **Scalability**: Auto-scale serverless functions based on traffic.  
-  - **Cost-Effectiveness**: Pay-per-use model means low cost for small projects.
+**Benefits**  
+- Automatic server provisioning, scaling, and health checks.  
+- Enterprise-grade security and compliance.  
+- Pay-as-you-go pricing minimizes costs for early-stage deployments.  
 
 ## 6. Infrastructure Components
 
-- **Load Balancer**
-  - Provided by the hosting platform—distributes API requests across function instances.
+**Load Balancer**  
+- AWS Application Load Balancer (ALB) distributes incoming HTTP(S) traffic across backend containers.  
 
-- **CDN (Content Delivery Network)**
-  - Vercel’s global edge network caches static assets (CSS, JS, images) for faster page loads.
+**Caching**  
+- Redis (Amazon ElastiCache) for session caching, rate limiting, and frequently accessed data (e.g., menu lists).  
 
-- **Caching**
-  - **Redis** (optional) for session storage or caching dashboard queries to reduce database load.
+**Content Delivery Network (CDN)**  
+- Amazon CloudFront to cache and serve static assets (images, CSS, JS) close to users for faster load times.  
 
-- **Object Storage**
-  - For file uploads or backups, integrate with AWS S3 or similar services.
-
-- **Message Queue**
-  - In future, use **RabbitMQ** or **Kafka** for background tasks (e.g., email notifications).
+**Real-Time Updates**  
+- Pusher or Ably for WebSocket connections, delivering live order updates to kitchen and staff interfaces.  
 
 ## 7. Security Measures
 
-- **Authentication & Authorization**
-  - Passwords hashed with **bcrypt** and salted.  
-  - Session tokens stored in secure, HttpOnly cookies or Authorization headers.  
-  - Protected endpoints verify tokens before proceeding.
+**Authentication & Authorization**  
+- Better Auth handles password hashing, token generation, and session management.  
+- Role-based checks in middleware and API routes enforce that only permitted roles can access or modify data.  
 
-- **Data Encryption**
-  - **HTTPS/TLS** encrypts data in transit.  
-  - Database connections use SSL to encrypt data between the app and the database.
+**Data Encryption**  
+- All traffic is encrypted in transit via HTTPS/TLS.  
+- Sensitive data (passwords, secrets) is encrypted at rest using AWS-managed encryption keys.  
 
-- **Input Validation**
-  - Every incoming request is validated (e.g., valid email format, password length) to prevent SQL injection or other attacks.
+**Network Security**  
+- Private subnets for database instances, public subnets for load balancers.  
+- Security groups and network ACLs restrict inbound and outbound traffic to only necessary ports.  
 
-- **Web Security Best Practices**
-  - Enable **CORS** policies to limit allowed origins.  
-  - Use **CSRF tokens** or same-site cookies to prevent cross-site requests.  
-  - Set secure headers with **Helmet** or a similar middleware.
+**Compliance & Best Practices**  
+- Periodic security audits and penetration tests.  
+- Adherence to OWASP Top 10 guidelines for API security.  
 
 ## 8. Monitoring and Maintenance
 
-- **Performance Monitoring**
-  - Integrate **Sentry** or **LogRocket** for real-time crash reporting and performance tracing.  
-  - Use Vercel’s built-in analytics to track request latencies and error rates.
+**Monitoring Tools**  
+- AWS CloudWatch for server logs, metrics (CPU, memory, HTTP status codes).  
+- New Relic or DataDog for application performance monitoring (APM) and real-time alerts.  
 
-- **Logging**
-  - Structured logs (JSON) for all API requests and errors, shipped to a log management service like **Datadog** or **Logflare**.
+**Logging**  
+- Structured logs (JSON) from API routes, ingested into CloudWatch or ELK stack for troubleshooting.  
 
-- **Health Checks**
-  - Define a `/health` endpoint that returns a 200 status if the service is up and the database is reachable.
-
-- **Maintenance Strategies**
-  - Automated migrations run on deploy to keep the database schema up to date.  
-  - Scheduled dependency audits and security scans (e.g., `npm audit`).
-  - Regular backups of the database (daily or weekly depending on usage).
+**Maintenance Practices**  
+- Automated backups of RDS snapshots daily.  
+- Drizzle migration pipelines run on every release to apply schema changes safely.  
+- Scheduled dependency updates and security patching via CI pipeline.  
 
 ## 9. Conclusion and Overall Backend Summary
 
-The backend for **codeguide-starter** is built on Next.js API Routes and Node.js, paired with PostgreSQL for data and optional Redis for caching. It follows a clear layered architecture that keeps code easy to maintain and extend. With RESTful endpoints for authentication and data, secure practices like password hashing and HTTPS, and hosting on Vercel for scalability and global performance, this setup meets the project’s goals for a fast, secure, and developer-friendly foundation. Future enhancements—such as background job queues, advanced monitoring, or richer data models—can be added without disrupting the core structure.
+This backend is a fully containerized, cloud-ready foundation for a multitenant restaurant SaaS.  
+- **Scalability**: Horizontal scaling, load balancing, and managed services ensure we can grow seamlessly.  
+- **Security & Isolation**: Tenant-aware queries, RBAC, and encrypted communications protect each restaurant’s data.  
+- **Maintainability**: TypeScript, Drizzle ORM, and clear code organization keep the codebase clean and evolvable.  
+- **Performance**: Caching layers, a CDN, and well-indexed data tables deliver a responsive experience for users around the globe.  
+
+With this structure in place, you can confidently add new modules (reservations, inventory, analytics) and onboard your first restaurant tenants, knowing that data isolation, security, and reliability are already built into the core.
