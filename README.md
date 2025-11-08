@@ -1,6 +1,36 @@
-# Codeguide Starter Fullstack
+# Multi-Tenant Restaurant SaaS Platform
 
-A modern web application starter template built with Next.js 15, featuring authentication, database integration, and dark mode support.
+A comprehensive Software as a Service (SaaS) platform for restaurant management that serves multiple restaurants from a single codebase with strict data isolation.
+
+## 🚀 Features
+
+### Multi-Tenancy Architecture
+- **Strict Data Isolation**: Each restaurant's data is completely isolated using tenant_id
+- **Role-Based Access Control (RBAC)**: Owner, Admin, Waiter, Kitchen, Cashier roles with specific permissions
+- **Subscription Management**: Multiple subscription tiers (Basic, Premium, Enterprise)
+- **Scalable Infrastructure**: Single codebase serving unlimited restaurants
+
+### Restaurant Management
+- **Menu Management**: Categories, items with images, pricing, ingredients, allergens
+- **Table Management**: Restaurant layout, QR code generation for table access
+- **Staff Management**: Role assignments, shift scheduling, permission management
+- **Order Management**: Real-time order tracking, status updates, kitchen display
+- **Analytics & Reporting**: Sales reports, popular items, revenue trends
+- **Customer Feedback**: Rating system, feedback management
+
+### User Roles
+- **Super Admin**: Platform management, restaurant onboarding, system monitoring
+- **Restaurant Owner**: Complete restaurant management, staff administration
+- **Waiter**: Order management, table assignments, customer service
+- **Kitchen**: Order preparation, cooking status updates
+- **Cashier**: Payment processing, receipt generation, daily reports
+- **End Customer**: QR code menu access, ordering, payments
+
+### Customer Experience
+- **QR Code Ordering**: Scan table QR code to view menu and place orders
+- **Mobile-Friendly**: Responsive design for all devices
+- **Real-Time Updates**: Live order status tracking
+- **Multiple Payment Options**: Cash, card, e-wallet integration
 
 ## Tech Stack
 

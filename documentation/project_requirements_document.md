@@ -1,117 +1,88 @@
-# Project Requirements Document: codeguide-starter
-
----
+# Project Requirements Document
 
 ## 1. Project Overview
 
-The **codeguide-starter** project is a boilerplate web application that provides a ready-made foundation for any web project requiring secure user authentication and a post-login dashboard. It sets up the common building blocks—sign-up and sign-in pages, API routes to handle registration and login, and a simple dashboard interface driven by static data. By delivering this skeleton, it accelerates development time and ensures best practices are in place from day one.
+This project is a multitenant Software-as-a-Service (SaaS) platform designed specifically for restaurants. Instead of building a separate instance for each restaurant, this single codebase and infrastructure will serve multiple independent tenants (restaurants) with strict data isolation. Three main user types will interact with the platform: Restaurant Owners, Restaurant Staff (e.g., kitchen or waiters), and a Super Admin who manages the overall system.
 
-This starter kit is being built to solve the friction developers face when setting up repeated common tasks: credential handling, session management, page routing, and theming. Key objectives include: 1) delivering a fully working authentication flow (registration & login), 2) providing a gated dashboard area upon successful login, 3) establishing a clear, maintainable project structure using Next.js and TypeScript, and 4) demonstrating a clean theming approach with global and section-specific CSS. Success is measured by having an end-to-end login journey in under 200 lines of code and zero runtime type errors.
-
----
+The goal is to give each restaurant a secure, branded dashboard where owners can manage menus, staff, and view sales analytics; staff can handle orders and table statuses; and the Super Admin can onboard new restaurants and oversee subscriptions. Success criteria include fully functional role-based access control, reliable tenant-level data isolation, a polished responsive UI, and a deployment-ready Docker setup.
 
 ## 2. In-Scope vs. Out-of-Scope
 
 ### In-Scope (Version 1)
-- User registration (sign-up) form with validation
-- User login (sign-in) form with validation
-- Next.js API routes under `/api/auth/route.ts` handling:
-  - Credential validation
-  - Password hashing (e.g., bcrypt)
-  - Session creation or JWT issuance
-- Protected dashboard pages under `/dashboard`:
-  - `layout.tsx` wrapping dashboard content
-  - `page.tsx` rendering static data from `data.json`
-- Global application layout in `/app/layout.tsx`
-- Basic styling via `globals.css` and `dashboard/theme.css`
-- TypeScript strict mode enabled
+- Multitenant architecture with a `restaurantId` key on all data tables for strict isolation.  
+- User Authentication via Better Auth for Owners, Staff, and Super Admin.  
+- Role-Based Access Control (RBAC) enforced in Next.js middleware or API routes.  
+- Protected Dashboard area in Next.js with:  
+  • Restaurant Owner portal (menu CRUD, staff management, basic analytics).  
+  • Kitchen staff view (order queue) and Waiter view (table status).  
+  • Super Admin portal (restaurant onboarding, subscription overview).  
+- Database integration with PostgreSQL using Drizzle ORM for type-safe queries.  
+- Responsive UI built with Next.js, React, Tailwind CSS, shadcn/ui components, and next-themes for dark mode.  
+- Docker and docker-compose setup for consistent local and production environments.
 
 ### Out-of-Scope (Later Phases)
-- Integration with a real database (PostgreSQL, MongoDB, etc.)
-- Advanced authentication flows (password reset, email verification, MFA)
-- Role-based access control (RBAC)
-- Multi-tenant or white-label theming
-- Unit, integration, or end-to-end testing suites
-- CI/CD pipeline and production deployment scripts
-
----
+- Customer-facing ordering pages and QR-code–driven menu access.  
+- Payment and billing integration (e.g., Stripe subscriptions).  
+- Real-time updates (WebSockets, Pusher).  
+- Advanced modules (reservations, inventory).  
+- Full CI/CD pipeline (will be addressed after core features are stable).
 
 ## 3. User Flow
 
-A new visitor lands on the root URL and sees a welcome page with options to **Sign Up** or **Sign In**. If they choose Sign Up, they fill in their email, password, and hit “Create Account.” The form submits to `/api/auth/route.ts`, which hashes the password, creates a new user session or token, and redirects them to the dashboard. If any input is invalid, an inline error message explains the issue (e.g., “Password too short”).
+When a Restaurant Owner first arrives, they sign up using an email and password via the Better Auth flow. After authentication, they land on the protected `/dashboard` area and are greeted by a sidebar (with links to Menu, Staff, Analytics) and a header. The Owner clicks “Menu,” creates categories and items, then invites Staff by entering their emails. Analytics displays basic sales charts filtered by the owner’s `restaurantId`.
 
-Once authenticated, the user is taken to the `/dashboard` route. Here they see a sidebar or header defined by `dashboard/layout.tsx`, and the main panel pulls in static data from `data.json`. They can log out (if that control is present), but otherwise their entire session is managed by server-side cookies or tokens. Returning users go directly to Sign In, submit credentials, and upon success they land back on `/dashboard`. Any unauthorized access to `/dashboard` redirects back to Sign In.
-
----
+A Staff member receives an invitation email and follows a link to set up their password. After signing in, they also land on `/dashboard` but see only the pages relevant to their role: a live order queue under “Kitchen” or a table status board under “Waiter.” The Super Admin signs in at `/admin`, sees a list of all onboarded restaurants, and can review subscription status and system health metrics.
 
 ## 4. Core Features
 
-- **Sign-Up Page (`/app/sign-up/page.tsx`)**: Form fields for email & password, client-side validation, POST to `/api/auth`.
-- **Sign-In Page (`/app/sign-in/page.tsx`)**: Form fields for email & password, client-side validation, POST to `/api/auth`.
-- **Authentication API (`/app/api/auth/route.ts`)**: Handles both registration and login based on HTTP method, integrates password hashing (bcrypt) and session or JWT logic.
-- **Global Layout (`/app/layout.tsx` + `globals.css`)**: Shared header, footer, and CSS resets across all pages.
-- **Dashboard Layout (`/app/dashboard/layout.tsx` + `dashboard/theme.css`)**: Sidebar or top nav for authenticated flows, section-specific styling.
-- **Dashboard Page (`/app/dashboard/page.tsx`)**: Reads `data.json`, renders it as cards or tables.
-- **Static Data Source (`/app/dashboard/data.json`)**: Example dataset to demo dynamic rendering.
-- **TypeScript Configuration**: `tsconfig.json` with strict mode and path aliases (if any).
-
----
+- **Multitenancy & Data Isolation**: Every record (menus, orders, staff) is scoped by `restaurantId` to prevent cross-tenant leakage.  
+- **Authentication & RBAC**: Better Auth for sign-up/sign-in, plus role checks on every API endpoint.  
+- **Protected Dashboard**: Next.js App Router route group (`/dashboard`) with a unified layout (sidebar + header).  
+- **Restaurant Owner Module**: Menu creation, editing, staff invitations, and sales analytics charts.  
+- **Staff Module**: Real-time order queue for kitchen staff and table status view for waiters.  
+- **Super Admin Module**: Restaurant onboarding, tenant subscription overview, and basic system health dashboard.  
+- **UI & Theming**: Responsive React components via shadcn/ui and Tailwind CSS; light/dark mode with next-themes.  
+- **Database Layer**: PostgreSQL with Drizzle ORM for schema definitions, migrations, and type-safe queries.  
+- **Containerization**: Dockerfiles and docker-compose for development and production parity.
 
 ## 5. Tech Stack & Tools
 
-- **Framework**: Next.js (App Router) for file-based routing, SSR/SSG, and API routes.
-- **Language**: TypeScript for type safety.
-- **UI Library**: React 18 for component-based UI.
-- **Styling**: Plain CSS via `globals.css` (global reset) and `theme.css` (sectional styling). Can easily migrate to CSS Modules or Tailwind in the future.
-- **Backend**: Node.js runtime provided by Next.js API routes.
-- **Password Hashing**: bcrypt (npm package).
-- **Session/JWT**: NextAuth.js or custom JWT logic (to be decided in implementation).
-- **IDE & Dev Tools**: VS Code with ESLint, Prettier extensions. Optionally, Cursor.ai for AI-assisted coding.
-
----
+- **Frontend**: Next.js 15 (App Router), React, TypeScript, Tailwind CSS, shadcn/ui, next-themes (dark mode).  
+- **Backend**: Next.js API Routes (Node.js), TypeScript.  
+- **Authentication**: Better Auth service for secure user management.  
+- **Database**: PostgreSQL; Drizzle ORM for type-safe queries and schema migrations.  
+- **Containerization**: Docker, docker-compose.  
+- **IDE/Plugins**: VS Code recommended; ESLint and Prettier for code consistency.
 
 ## 6. Non-Functional Requirements
 
-- **Performance**: Initial page load under 200 ms on a standard broadband connection. API responses under 300 ms.
-- **Security**:
-  - HTTPS only in production.
-  - Proper CORS, CSRF protection for API routes.
-  - Secure password storage (bcrypt with salt).
-  - No credentials or secrets checked into version control.
-- **Scalability**: Structure must support adding database integration, caching layers, and advanced auth flows without rewiring core app.
-- **Usability**: Forms should give real-time feedback on invalid input. Layout must be responsive (mobile > 320 px).
-- **Maintainability**: Code must adhere to TypeScript strict mode. Linting & formatting enforced by ESLint/Prettier.
-
----
+- **Performance**: Page loads under 2 seconds; API responses within 200 ms under average load.  
+- **Scalability**: Support at least 100 concurrent restaurants and 1,000 concurrent users across tenants.  
+- **Security**: TLS/HTTPS everywhere; encrypted credentials; RBAC enforcement on every endpoint; audit logs.  
+- **Compliance**: Data isolation must satisfy GDPR/CCPA requirements; prepare data deletion workflows.  
+- **Usability**: Responsive layouts for desktop and tablet; 95+ Lighthouse accessibility score.
 
 ## 7. Constraints & Assumptions
 
-- **No Database**: Dashboard uses only `data.json`; real database integration is deferred.
-- **Node Version**: Requires Node.js >= 14.
-- **Next.js Version**: Built on Next.js 13+ App Router.
-- **Authentication**: Assumes availability of bcrypt or NextAuth.js at implementation time.
-- **Hosting**: Targets serverless or Node.js-capable hosting (e.g., Vercel, Netlify).
-- **Browser Support**: Modern evergreen browsers; no IE11 support required.
-
----
+- Better Auth supports custom roles and session management at scale.  
+- PostgreSQL instance is available and connections are managed per tenant.  
+- Docker is installed in development and production environments.  
+- Environment variables (DB credentials, auth keys) are configured per environment.  
+- All developers use the same Node.js version and follow the defined ESLint/Prettier rules.
 
 ## 8. Known Issues & Potential Pitfalls
 
-- **Static Data Limitation**: `data.json` is only for demo. A real API or database will be needed to avoid stale data.
-  *Mitigation*: Define a clear interface for data fetching so swapping to a live endpoint is trivial.
-
-- **Global CSS Conflicts**: Using global styles can lead to unintended overrides.
-  *Mitigation*: Plan to migrate to CSS Modules or utility-first CSS in Phase 2.
-
-- **API Route Ambiguity**: Single `/api/auth/route.ts` handling both sign-up and sign-in could get complex.
-  *Mitigation*: Clearly branch on HTTP method (`POST /register` vs. `POST /login`) or split into separate files.
-
-- **Lack of Testing**: No test suite means regressions can slip in.
-  *Mitigation*: Build a minimal Jest + React Testing Library setup in an early iteration.
-
-- **Error Handling Gaps**: Client and server must handle edge cases (network failures, malformed input).
-  *Mitigation*: Define a standard error response schema and show user-friendly messages.
+- **Tenant Data Leakage**: If a query forgets to filter by `restaurantId`, data could cross boundaries.  
+  • Mitigation: Create a database helper that automatically adds `restaurantId` to all queries.  
+- **Drizzle Migrations**: Schema changes require careful migration scripts.  
+  • Mitigation: Enforce a strict review process for all schema_changes and include rollback scripts.  
+- **Authentication Rate Limits**: Better Auth endpoints may throttle under load.  
+  • Mitigation: Implement exponential backoff and caching for session tokens.  
+- **Role Escalation**: Bugs in middleware could allow unauthorized actions.  
+  • Mitigation: Write integration tests to cover every endpoint with every role.  
+- **Docker Volume Conflicts**: Shared volumes in docker-compose may cause file permission issues.  
+  • Mitigation: Document volume paths and permission fixes in the README.
 
 ---
 
-This PRD should serve as the single source of truth for the AI model or any developer generating the next set of technical documents: Tech Stack Doc, Frontend Guidelines, Backend Structure, App Flow, File Structure, and IDE Rules. It contains all functional and non-functional requirements with no ambiguity, enabling seamless downstream development.
+This PRD contains all the essential information to guide the AI and development teams in building the first version of the multitenant restaurant SaaS platform without ambiguity. Subsequent documents (Tech Stack, Frontend Guidelines, Backend Structure, etc.) can now be drafted based on these clear requirements.
